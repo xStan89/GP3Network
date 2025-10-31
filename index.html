@@ -1,0 +1,1132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Build Canada</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter Tight:wght@400;700&display=swap');
+    
+    :root {
+      --bg: #ffffff;
+      --info-bg: #0b1220;
+      --info-text: #ffffff;
+      --font-family: 'Inter Tight', Arial, Helvetica, sans-serif;
+    }
+    html,body { 
+      height:100%; 
+      margin:0; 
+      font-family: var(--font-family); 
+      background:var(--bg); 
+    }
+    #wrap { display:flex; height:100vh; overflow:hidden; }
+
+    /* GRAPH AREA */
+    #graph-area { position:relative; flex:1; background:var(--bg); }
+    canvas { width:100%; height:100%; display:block; background:var(--bg); }
+
+    /* TOP CONTROLS - ZOOM */
+    #top-controls {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      display: flex;
+      gap: 12px;
+      z-index: 10;
+    }
+
+    #zoom-controls {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .zoom-btn {
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      background: #494949;
+      color: #fff;
+      font-size: 14px;
+      min-width: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-family);
+    }
+    
+    .zoom-btn:hover {
+      background: #5a5a5a;
+    }
+    
+    .zoom-btn:active {
+      background: #3a3a3a;
+    }
+
+    /* INFO PANEL */
+    #info-panel {
+      width:320px; min-width:260px; max-width:360px;
+      background: var(--info-bg); color: var(--info-text);
+      padding:12px; box-sizing:border-box;
+      display:flex; flex-direction:column;
+      border-left: 1px solid rgba(255,255,255,0.04);
+      font-size:13px;
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    #controls { 
+      display:flex; 
+      gap:8px; 
+      align-items:center; 
+      flex-shrink: 0; 
+      margin-bottom: 8px;
+    }
+    #search-box { display:flex; width:100%; gap:6px; flex-wrap: wrap;}
+    #search-input { 
+      flex:1; 
+      min-width: 0;
+      padding:6px 8px; 
+      border-radius:4px; 
+      border:1px solid rgba(255,255,255,0.06); 
+      background: rgba(255,255,255,0.02); 
+      color:inherit;
+      font-family: var(--font-family); 
+    }
+    #search-btn, #clear-btn { 
+      padding:8px 8px; 
+      border-radius:4px; 
+      border:none; 
+      cursor:pointer; 
+      background:#494949; 
+      color:#fff;
+      font-family: var(--font-family);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    #colorby-select { width:100%; padding:6px 8px; border-radius:4px; border:none; background:#0b1220; color:inherit; }
+
+    #suggestions { background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03); max-height:160px; overflow:auto; display:none; padding:6px; border-radius:4px; }
+    .suggestion { padding:6px; cursor:pointer; border-bottom:1px dashed rgba(255,255,255,0.03); }
+    .suggestion:hover { background: rgba(255,255,255,0.03); }
+
+    #node-info { 
+      margin-top:8px; 
+      padding:8px; 
+      background: rgba(255,255,255,0.02); 
+      border-radius:6px; 
+      flex-shrink: 0;
+    }
+    #node-title { font-weight:700; }
+    .muted { color:#454545; font-weight:700;}
+
+    #node-links {
+      margin-top: 8px;
+      flex-shrink: 0;
+    }
+
+    #connections-box {
+      margin-top: -6px;
+      background: rgba(255,255,255,0.02);
+      border-radius:6px;
+      padding:6px;
+      overflow:auto;
+      border: 1px solid rgba(255,255,255,0.03);
+      flex: 1;
+      min-height: 0;
+    }
+    .conn-item {
+      padding:6px;
+      cursor:pointer;
+      font-size:13px;
+      color:var(--info-text);
+      border-bottom:1px dashed rgba(255,255,255,0.03);
+    }
+    .conn-item:hover { background: rgba(0, 0, 0, 0); }
+
+    #msg { margin-top:6px; color:#fca5a5; font-size:13px; min-height:18px; }
+
+    /* LOADING OVERLAY */
+    #loading-overlay {
+      position:fixed; left:0; top:0; right:0; bottom:0;
+      display:flex; align-items:center; justify-content:center;
+      flex-direction:column; gap:10px;
+      background: rgba(255,255,255,0.7);
+      z-index:99999;
+      font-size:16px; color:#111827;
+    }
+    .spinner {
+      width:64px; height:64px;
+      border-radius:80%;
+      border:20px solid rgba(83, 83, 83, 0.38);
+      border-left-color:#FED342;
+      animation:spin 2s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* responsive */
+    @media (max-width: 900px) { #info-panel { width:260px; } }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="graph-area">
+      <canvas id="canvas"></canvas>
+      
+      <div id="top-controls">
+        <div id="zoom-controls">
+          <button id="zoom-in" class="zoom-btn" title="Zoom In">+</button>
+          <button id="zoom-out" class="zoom-btn" title="Zoom Out">−</button>
+          <button id="zoom-reset" class="zoom-btn" title="Reset Zoom">Reset</button>
+        </div>
+      </div>
+
+      <div id="loading-overlay" aria-hidden="false">
+        <div class="spinner" role="img" aria-label="loading"></div>
+        <div id="loading-text">This takes a few seconds...</div>
+      </div>
+    </div>
+
+      <aside id="info-panel" style="--info-bg:var(--info-bg); --info-text:var(--info-text);">
+        <div id="controls">
+          <div id="search-box">
+            <input id="search-input" placeholder="Search..." />
+            <button id="search-btn">Search</button>
+          </div>
+        </div>
+
+        <button id="clear-btn" style="margin-bottom: 8px; flex-shrink: 0;">Clear Selection</button>
+
+        <div id="suggestions"></div>
+
+        <div id="node-info">
+          <div id="node-title"></div>
+          <div id="node-meta" class="muted" style="margin-top:6px;"></div>
+        </div>
+
+        <div id="node-links">
+          <!-- Wikipedia/More Info links will go here -->
+        </div>
+
+        <div id="connections-box" aria-live="polite"></div>
+
+        <div id="msg"></div>
+      </aside>
+  </div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+  /************************************************************************
+   * CONFIG
+   ************************************************************************/
+  const CONFIG = {
+    LINKS_CSV: './Links.csv',
+    POINTS_CSV: './Labels.csv',
+
+    backgroundColor: '#ffffff',
+    defaultPointColor: '#CCCCCC',
+    colorPalette: d3.schemeTableau10,
+    pointOpacity: 0.98,
+    unconnectedOpacity: 0.1,
+    linkColor: '#000000',
+    linkOpacityNoSelection: 0.15,
+    linkOpacitySelected: 0.4,
+    pointStrokeColor: '#222222',
+    pointStrokeWidth: 2.5,
+
+    labelFontSize: 17,
+    labelBoxPadding: 4,
+    labelOffsetY: 4,
+    labelBoxOpacity: 0.7,
+
+    // Area-based sizing
+    area1Size: 60,
+    area2Size: 45,
+    area3Size: 8,
+
+    // Vertical positioning (percentage of canvas height)
+    area1Top: 0.10,
+    area1Bottom: 0.33,
+    area2Top: 0.38,
+    area2Bottom: 0.62,
+    area3Top: 0.70,
+    area3Bottom: 0.90,
+
+    // Horizontal spacing
+    areaMargin: 100,
+    minNodeSpacing: 10,
+
+    showImages: true,
+    maxSuggestions: 12,
+    
+    zoomMin: 0.2,
+    zoomMax: 5.0,
+    zoomStep: 0.2
+  };
+  /************************************************************************
+   * END CONFIG
+   ************************************************************************/
+  
+  const PADDING = 80;
+
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  
+  let zoomLevel = 1.0;
+  let panX = 0;
+  let panY = 0;
+  
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragStartPanX = 0;
+  let dragStartPanY = 0;
+  let area3Sim = null;   // D3 simulation for area-3 + area-2 fixed anchors
+
+  
+  function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    const hiResScale = devicePixelRatio * 1.5;
+    canvas.width  = Math.max(600, Math.floor(rect.width  * hiResScale));
+    canvas.height = Math.max(400, Math.floor(rect.height * hiResScale));
+    ctx.setTransform(hiResScale, 0, 0, hiResScale, 0, 0);
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  }
+  
+  window.addEventListener('resize', () => { 
+    resizeCanvas(); 
+    positionNodes();
+    render();
+  });
+  resizeCanvas();
+
+  const loadingOverlay = document.getElementById('loading-overlay');
+  const loadingText = document.getElementById('loading-text');
+  const searchInput = document.getElementById('search-input');
+  const searchBtn = document.getElementById('search-btn');
+  const clearBtn = document.getElementById('clear-btn');
+  const suggestionsEl = d3.select('#suggestions');
+  const nodeTitleEl = d3.select('#node-title');
+  const nodeMetaEl = d3.select('#node-meta');
+  const nodeLinkEl = d3.select('#node-links');
+  const connectionsBox = document.getElementById('connections-box');
+  const msgEl = d3.select('#msg');
+
+  const zoomInBtn = document.getElementById('zoom-in');
+  const zoomOutBtn = document.getElementById('zoom-out');
+  const zoomResetBtn = document.getElementById('zoom-reset');
+
+  let nodes = [];
+  let links = [];
+  let nodeById = new Map();
+  let adjacency = new Map();
+  let connectionSources = new Map();
+  let nameIndex = [];
+  let selectedNode = null;
+  let imageLoadPromises = [];
+  const categoricalColor = d3.scaleOrdinal(CONFIG.colorPalette);
+
+  function zoomIn() {
+    zoomLevel = Math.min(CONFIG.zoomMax, zoomLevel + CONFIG.zoomStep);
+    updateCanvasCursor();
+    render();
+  }
+  
+  function zoomOut() {
+    zoomLevel = Math.max(CONFIG.zoomMin, zoomLevel - CONFIG.zoomStep);
+    updateCanvasCursor();
+    render();
+  }
+  
+  function resetZoom() {
+    zoomLevel = 1.0;
+    panX = 0;
+    panY = 0;
+    updateCanvasCursor();
+    render();
+  }
+
+  function updateCanvasCursor() {
+    if (isDragging) {
+      canvas.style.cursor = 'grabbing';
+    } else if (zoomLevel > 1.0) {
+      canvas.style.cursor = 'grab';
+    } else {
+      canvas.style.cursor = 'default';
+    }
+  }
+
+  zoomInBtn.addEventListener('click', zoomIn);
+  zoomOutBtn.addEventListener('click', zoomOut);
+  zoomResetBtn.addEventListener('click', resetZoom);
+
+  function normalizeUrl(u) {
+    if (!u) return null;
+    const s = String(u).trim();
+    if (s === '') return null;
+    if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//.test(s)) return s;
+    return 'https://' + s.replace(/^[\/]+/, '');
+  }
+
+  function getNodeSize(area) {
+    if (area === 1) return CONFIG.area1Size;
+    if (area === 2) return CONFIG.area2Size;
+    return CONFIG.area3Size;
+  }
+
+  function getAreaBounds(area, canvasHeight) {
+    if (area === 1) {
+      return {
+        top: canvasHeight * CONFIG.area1Top,
+        bottom: canvasHeight * CONFIG.area1Bottom
+      };
+    } else if (area === 2) {
+      return {
+        top: canvasHeight * CONFIG.area2Top,
+        bottom: canvasHeight * CONFIG.area2Bottom
+      };
+    } else {
+      return {
+        top: canvasHeight * CONFIG.area3Top,
+        bottom: canvasHeight * CONFIG.area3Bottom
+      };
+    }
+  }
+
+  /************************************************************************
+   * POSITION NODES — CONCENTRIC SEMICIRCLES (REPLACEMENT)
+   ************************************************************************/
+function positionNodes() {
+  if (!nodes || nodes.length === 0) return;
+  
+  const canvasWidth = canvas.width / devicePixelRatio;
+  const canvasHeight = canvas.height / devicePixelRatio;
+
+  // Center horizontally
+  const centerX = canvasWidth / 2;
+
+  // Available radius constrained by width and height (leave some padding)
+  const horizontalAvailable = (canvasWidth - 2 * CONFIG.areaMargin) / 2;
+  const verticalAvailable = canvasHeight - (PADDING * 1.5);
+  const maxRadius = Math.max(10, Math.min(horizontalAvailable, verticalAvailable));
+
+  // For a SMILE: put centerY BELOW midpoint so arcs bend upward
+  const centerY = canvasHeight - PADDING - maxRadius;
+
+  // Radii for areas 1 (inner) -> 3 (outer)
+  const radii = {
+    1: maxRadius * 0.33,
+    2: maxRadius * 0.66,
+    3: maxRadius * 1.00
+  };
+
+  // Group nodes by area
+  const nodesByArea = new Map();
+  nodes.forEach(n => {
+    const area = n.area || 3;
+    if (!nodesByArea.has(area)) nodesByArea.set(area, []);
+    nodesByArea.get(area).push(n);
+  });
+
+  // Position each node along semicircles that curve upward (smile)
+  [1, 2, 3].forEach(area => {
+    const areaNodes = nodesByArea.get(area) || [];
+    if (areaNodes.length === 0) return;
+
+    areaNodes.sort((a, b) => (a.areaOrder || 0) - (b.areaOrder || 0));
+    const r = radii[area] || radii[3];
+
+    if (areaNodes.length === 1) {
+      const angle = Math.PI * 1.5; // middle
+      areaNodes[0].x = centerX + r * Math.cos(angle);
+      areaNodes[0].y = centerY - r * Math.sin(angle); // flip vertical direction
+    } else {
+      for (let i = 0; i < areaNodes.length; i++) {
+        const t = i / (areaNodes.length - 1);
+        const angle = Math.PI + t * Math.PI; // left π → right 2π
+        areaNodes[i].x = centerX + r * Math.cos(angle);
+        areaNodes[i].y = centerY - r * Math.sin(angle); // FLIP to curve upward
+      }
+    }
+  });
+
+  // Keep node radii consistent
+  nodes.forEach(n => {
+    if (n.area === 1 || n.area === 2) {
+      n.r = getNodeSize(n.area);
+    }
+  });
+
+    // keep node radii consistent with area
+    // For area 1 and 2 nodes, enforce default sizes; leave area 3 as-is
+nodes.forEach(n => {
+  if (n.area === 1 || n.area === 2) {
+    n.r = getNodeSize(n.area);
+  }
+  // area 3 node size comes from CSV; do not overwrite
+});
+
+  }
+  /************************************************************************
+   * END POSITION NODES
+   ************************************************************************/
+
+  loadingOverlay.style.display = 'flex';
+
+  requestAnimationFrame(() => {
+    Promise.all([ d3.csv(CONFIG.LINKS_CSV), d3.csv(CONFIG.POINTS_CSV) ])
+      .then(([rawLinks, rawPoints]) => {
+        rawPoints.forEach(r => { Object.keys(r).forEach(k => { if (k !== k.trim()) { r[k.trim()] = r[k]; delete r[k]; } }); });
+        rawLinks.forEach(r => { Object.keys(r).forEach(k => { if (k !== k.trim()) { r[k.trim()] = r[k]; delete r[k]; } }); });
+
+        nodes = rawPoints.map((d,i) => {
+          const id = d['Entity Name'] ? String(d['Entity Name']).trim() : `__P_${i}`;
+          const area = parseInt(d['Area']) || 3;
+          const areaOrder = parseFloat(d['Area Order']) || 0;
+           // Determine node size
+          let nodeSize = getNodeSize(area);  // default for all areas
+          if (area === 3) {
+            const csvSize = parseFloat(d['Size']);
+            if (!isNaN(csvSize) && csvSize > 0) nodeSize = csvSize; // override only for area 3
+          }
+
+          // Debug: log first few nodes to see what's happening
+          if (i < 5) {
+            console.log(`Node ${i}: ${id}, Area: ${d['Area']} -> ${area}, Order: ${d['Area Order']} -> ${areaOrder}, Size: ${nodeSize}`);
+          }
+
+          return {
+            id, 
+            name: id, 
+            raw: d, 
+            area,
+            areaOrder,
+            image: d['Image'] ? d['Image'].trim() : null, 
+            imageBitmap: null,
+            x: 0, 
+            y: 0,
+            vx: 0, 
+            vy: 0,
+            r: nodeSize
+          };
+        });
+
+        console.log(`Total nodes created: ${nodes.length}`);
+        console.log(`Nodes by area:`, {
+          area1: nodes.filter(n => n.area === 1).length,
+          area2: nodes.filter(n => n.area === 2).length,
+          area3: nodes.filter(n => n.area === 3).length
+        });
+
+        nodeById = new Map(nodes.map(n => [n.id, n]));
+
+        const tmpLinks = (rawLinks || []).map(r => ({
+          sourceName: (r['A']||'').toString().trim(),
+          targetName: (r['B']||'').toString().trim(),
+          value: +((r['Link Size']||r['LinkSize']) || 1) || 1,
+          source: (r['Source']||'').toString().trim()
+        })).filter(l => l.sourceName && l.targetName);
+
+        tmpLinks.forEach(l => {
+          if (!nodeById.has(l.sourceName)) {
+            const n = { 
+              id: l.sourceName, 
+              name: l.sourceName, 
+              raw: {}, 
+              area: 3,
+              areaOrder: 999,
+              image: null, 
+              imageBitmap: null, 
+              x: 0, 
+              y: 0, 
+              vx: 0,
+              vy: 0,
+              r: CONFIG.area3Size 
+            };
+            nodes.push(n); 
+            nodeById.set(n.id, n);
+          }
+          if (!nodeById.has(l.targetName)) {
+            const n = { 
+              id: l.targetName, 
+              name: l.targetName, 
+              raw: {}, 
+              area: 3,
+              areaOrder: 999,
+              image: null, 
+              imageBitmap: null, 
+              x: 0, 
+              y: 0, 
+              vx: 0,
+              vy: 0,
+              r: CONFIG.area3Size 
+            };
+            nodes.push(n); 
+            nodeById.set(n.id, n);
+          }
+        });
+
+        links = tmpLinks.map(l => ({ 
+          source: nodeById.get(l.sourceName), 
+          target: nodeById.get(l.targetName), 
+          value: l.value,
+          sourceUrl: l.source
+        })).filter(l => l.source && l.target);
+
+        adjacency = new Map(); 
+        connectionSources = new Map();
+        nodes.forEach(n => {
+          adjacency.set(n.id, new Set());
+          connectionSources.set(n.id, new Map());
+        });
+        links.forEach(l => {
+          adjacency.get(l.source.id).add(l.target.id);
+          adjacency.get(l.target.id).add(l.source.id);
+          
+          if (l.sourceUrl) {
+            connectionSources.get(l.source.id).set(l.target.id, l.sourceUrl);
+            connectionSources.get(l.target.id).set(l.source.id, l.sourceUrl);
+          }
+        });
+
+        nameIndex = nodes.map(n => n.name);
+
+        const linkValues = links.map(l => l.value || 1);
+        const linkWidthScale = d3.scaleLinear().domain([d3.min(linkValues) || 1, d3.max(linkValues) || 1]).range([0.6, 4]).clamp(true);
+        window.__linkWidthScale = linkWidthScale;
+
+        // Position all nodes based on Area and Area Order
+        positionNodes();
+
+        const imgNodes = nodes.filter(n => n.image && CONFIG.showImages);
+        imageLoadPromises = imgNodes.map(n => {
+          return new Promise(async resolve => {
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 7000);
+              const resp = await fetch(n.image, { mode: 'cors', signal: controller.signal }).catch(()=>null);
+              clearTimeout(timeoutId);
+              if (!resp || !resp.ok) throw new Error('fetch failed');
+              const blob = await resp.blob();
+              if (typeof createImageBitmap === 'function') {
+                try {
+                  const bmp = await createImageBitmap(blob, { resizeQuality: 'high' });
+                  n.imageBitmap = bmp;
+                  resolve({n,ok:true});
+                  return;
+                } catch (e) {
+                }
+              }
+              const img = new Image();
+              img.onload = () => { n.imageBitmap = img; resolve({n,ok:true}); };
+              img.onerror = () => { n.imageBitmap = null; resolve({n,ok:false}); };
+              img.src = URL.createObjectURL(blob);
+              setTimeout(() => { if (!n.imageBitmap) { n.imageBitmap = null; resolve({n,ok:false}); } }, 7000);
+            } catch (err) {
+              try {
+                const img2 = new Image();
+                img2.onload = () => { n.imageBitmap = img2; resolve({n,ok:true}); };
+                img2.onerror = () => { n.imageBitmap = null; resolve({n,ok:false}); };
+                img2.src = n.image;
+                setTimeout(() => { if (!n.imageBitmap) resolve({n,ok:false}); }, 7000);
+              } catch (e) {
+                n.imageBitmap = null;
+                resolve({n,ok:false});
+              }
+            }
+          });
+        });
+
+        render();
+        hideLoadingOverlay();
+
+        Promise.allSettled(imageLoadPromises).then(() => { render(); });
+
+      }).catch(err => {
+        console.error('CSV load error', err);
+        loadingText.textContent = 'Failed to load CSV files – check paths and console.';
+        setTimeout(() => { loadingOverlay.style.display = 'none'; }, 8000);
+      });
+  });
+
+  function clearCanvas() {
+    ctx.fillStyle = CONFIG.backgroundColor;
+    ctx.fillRect(0, 0, canvas.width/devicePixelRatio, canvas.height/devicePixelRatio);
+  }
+
+  function applyTransform() {
+    const centerX = (canvas.width/devicePixelRatio) / 2;
+    const centerY = (canvas.height/devicePixelRatio) / 2;
+    ctx.translate(centerX + panX, centerY + panY);
+    ctx.scale(zoomLevel, zoomLevel);
+    ctx.translate(-centerX, -centerY);
+  }
+
+  function roundRectPath(x, y, w, h, r) {
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+  }
+
+  function drawLink(l, opacity) {
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.beginPath();
+    ctx.moveTo(l.source.x, l.source.y);
+    ctx.lineTo(l.target.x, l.target.y);
+    ctx.lineWidth = (window.__linkWidthScale ? window.__linkWidthScale(l.value) : 1) / zoomLevel;
+    ctx.strokeStyle = CONFIG.linkColor;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawNode(n, opacity, showImage=true) {
+    ctx.save();
+    const x = n.x, y = n.y, r = n.r;
+
+    if (showImage && n.imageBitmap) {
+      ctx.save();
+      ctx.globalAlpha = opacity;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI*2);
+      ctx.clip();
+      const img = n.imageBitmap;
+      const iw = img.width || img.naturalWidth || 1;
+      const ih = img.height || img.naturalHeight || 1;
+      const target = r * 2;
+      const scale = Math.max(target / iw, target / ih);
+      const dw = iw * scale;
+      const dh = ih * scale;
+      const dx = x - dw / 2;
+      const dy = y - dh / 2;
+      try {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, dx, dy, dw, dh);
+      } catch (e) {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI*2);
+        ctx.fillStyle = getNodeFill(n);
+        ctx.fill();
+      }
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.globalAlpha = opacity;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI*2);
+      ctx.fillStyle = getNodeFill(n);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.lineWidth = CONFIG.pointStrokeWidth / zoomLevel;
+    ctx.strokeStyle = CONFIG.pointStrokeColor;
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  function drawLabel(n) {
+    const text = n.name || '';
+    if (!text) return;
+    ctx.save();
+    ctx.font = `${CONFIG.labelFontSize / zoomLevel}px Inter Tight, Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const metrics = ctx.measureText(text);
+    const textW = metrics.width;
+    const pad = CONFIG.labelBoxPadding / zoomLevel;
+    const boxW = textW + pad * 2;
+    const boxH = (CONFIG.labelFontSize + 6) / zoomLevel;
+    const x = n.x - boxW / 2;
+    const y = n.y + n.r + CONFIG.labelOffsetY / zoomLevel;
+
+    ctx.save();
+    ctx.globalAlpha = CONFIG.labelBoxOpacity;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    roundRectPath(x, y, boxW, boxH, 6 / zoomLevel);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = '#111827';
+    ctx.fillText(text, n.x, y + boxH / 2);
+    ctx.restore();
+  }
+
+  function getNodeFill(n) {
+    return CONFIG.defaultPointColor;
+  }
+
+  function shouldHighlightNode(node) {
+    const activeNode = selectedNode;
+    if (!activeNode) return true;
+    
+    const activeSet = new Set([activeNode.id, ...(adjacency.get(activeNode.id) || [])]);
+    return activeSet.has(node.id);
+  }
+
+  function render() {
+    clearCanvas();
+    if (!nodes || nodes.length === 0) return;
+
+    ctx.save();
+    applyTransform();
+
+    const activeNode = selectedNode;
+    
+    const highlightedNodes = [];
+    const unhighlightedNodes = [];
+    
+    nodes.forEach(node => {
+      if (shouldHighlightNode(node)) {
+        highlightedNodes.push(node);
+      } else {
+        unhighlightedNodes.push(node);
+      }
+    });
+
+    unhighlightedNodes.forEach(n => drawNode(n, CONFIG.unconnectedOpacity, CONFIG.showImages));
+
+    if (activeNode) {
+      const highlightedSet = new Set(highlightedNodes.map(n => n.id));
+      links.forEach(l => {
+        if (highlightedSet.has(l.source.id) && highlightedSet.has(l.target.id)) {
+          drawLink(l, CONFIG.linkOpacitySelected);
+        }
+      });
+    } else {
+      const highlightedSet = new Set(highlightedNodes.map(n => n.id));
+      links.forEach(l => {
+        if (highlightedSet.has(l.source.id) && highlightedSet.has(l.target.id)) {
+          drawLink(l, CONFIG.linkOpacityNoSelection);
+        }
+      });
+    }
+
+    highlightedNodes.forEach(n => drawNode(n, CONFIG.pointOpacity, CONFIG.showImages));
+
+    if (activeNode) {
+      highlightedNodes.forEach(n => {
+        if (adjacency.get(activeNode.id).has(n.id) || n === activeNode) {
+          drawLabel(n);
+        }
+      });
+    }
+
+    // Draw label for hovered node (even if not selected)
+    if (hoveredNode && hoveredNode !== activeNode) {
+      drawLabel(hoveredNode);
+    }
+
+    ctx.restore();
+  }
+
+  function getCanvasPos(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (evt.clientX - rect.left) * (canvas.width / devicePixelRatio) / rect.width;
+    const y = (evt.clientY - rect.top) * (canvas.height / devicePixelRatio) / rect.height;
+    
+    const centerX = (canvas.width/devicePixelRatio) / 2;
+    const centerY = (canvas.height/devicePixelRatio) / 2;
+    
+    const transformedX = (x - centerX - panX) / zoomLevel + centerX;
+    const transformedY = (y - centerY - panY) / zoomLevel + centerY;
+    
+    return { x: transformedX, y: transformedY };
+  }
+
+  function findNodeAtPos(x, y) {
+    if (!nodes || nodes.length === 0) return null;
+    if (selectedNode) {
+      const activeSet = new Set([selectedNode.id, ...(adjacency.get(selectedNode.id) || [])]);
+      const activeNodes = nodes.filter(n => activeSet.has(n.id));
+      for (let i = activeNodes.length - 1; i >= 0; i--) {
+        const n = activeNodes[i];
+        if (Math.hypot(n.x - x, n.y - y) <= n.r) return n;
+      }
+      const otherNodes = nodes.filter(n => !activeSet.has(n.id));
+      for (let i = otherNodes.length - 1; i >= 0; i--) {
+        const n = otherNodes[i];
+        if (Math.hypot(n.x - x, n.y - y) <= n.r) return n;
+      }
+    } else {
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const n = nodes[i];
+        if (Math.hypot(n.x - x, n.y - y) <= n.r) return n;
+      }
+    }
+    return null;
+  }
+
+  canvas.addEventListener('mousedown', (evt) => {
+    if (zoomLevel <= 1.0) return;
+    
+    isDragging = true;
+    updateCanvasCursor();
+    
+    dragStartX = evt.clientX;
+    dragStartY = evt.clientY;
+    dragStartPanX = panX;
+    dragStartPanY = panY;
+    
+    evt.preventDefault();
+  });
+
+  canvas.addEventListener('mousemove', (evt) => {
+    if (!isDragging || zoomLevel <= 1.0) {
+      updateCanvasCursor();
+      return;
+    }
+    
+    const deltaX = evt.clientX - dragStartX;
+    const deltaY = evt.clientY - dragStartY;
+    
+    panX = dragStartPanX + deltaX / zoomLevel;
+    panY = dragStartPanY + deltaY / zoomLevel;
+    
+    render();
+    evt.preventDefault();
+  });
+
+  let hoveredNode = null;
+  
+  canvas.addEventListener('mousemove', (evt) => {
+    // Don't show hover labels while dragging
+    if (isDragging) return;
+    
+    const pos = getCanvasPos(evt);
+    const n = findNodeAtPos(pos.x, pos.y);
+    
+    // Only re-render if hover state changed
+    if (n !== hoveredNode) {
+      hoveredNode = n;
+      render();
+    }
+  });
+
+  canvas.addEventListener('mouseleave', (evt) => {
+    isDragging = false;
+    updateCanvasCursor();
+    // Clear hover state when mouse leaves canvas
+    if (hoveredNode) {
+      hoveredNode = null;
+      render();
+    }
+  });
+
+  canvas.addEventListener('mouseup', (evt) => {
+    if (isDragging) {
+      const deltaX = Math.abs(evt.clientX - dragStartX);
+      const deltaY = Math.abs(evt.clientY - dragStartY);
+      
+      isDragging = false;
+      updateCanvasCursor();
+      
+      if (deltaX < 3 && deltaY < 3) {
+        const pos = getCanvasPos(evt);
+        const n = findNodeAtPos(pos.x, pos.y);
+        if (n) {
+          selectedNode = n;
+          populateInfoPanel(n);
+          render();
+        } else {
+          selectedNode = null;
+          clearInfoPanel();
+          render();
+        }
+      }
+      evt.preventDefault();
+    }
+  });
+
+  canvas.addEventListener('click', (evt) => {
+    if (zoomLevel > 1.0 || isDragging) return;
+    
+    const pos = getCanvasPos(evt);
+    const n = findNodeAtPos(pos.x, pos.y);
+    if (n) {
+      selectedNode = n;
+      populateInfoPanel(n);
+      render();
+    } else {
+      selectedNode = null;
+      clearInfoPanel();
+      render();
+    }
+  });
+
+  function populateInfoPanel(d) {
+    const desc = (d.raw && (d.raw['Description'] || '')) || '';
+    const category = (d.raw && (d.raw['Category'] || '')) || '';
+    const connectionCount = (adjacency.get(d.id) || new Set()).size;
+
+    nodeTitleEl.html(`
+      <div style="display:flex; align-items:center; gap:8px; font-size:24px; font-weight:1400;">
+        <span>${d.name}</span>
+        ${d.image ? `<img src="${d.image}" style="width:40px; height:40px; object-fit:cover; border-radius:50%;">` : ''}
+      </div>
+      ${category ? `<div style="font-size: 15px; font-weight: bold; margin-top: 6px;">${category.replace(/\n/g, '<br>')}</div>` : ''}
+      ${desc ? `<div style="font-size: 13px; font-weight: normal;">${desc}</div>` : ''}
+      <div style="font-size: 14px; font-weight: bold; margin-top: 6px;">
+        <br>
+        <br>Connected to: 
+      </div>
+    `);
+
+    const rawLink = (d.raw && (d.raw['Link'] || d.raw['Link '])) || '';
+    const safe = normalizeUrl(rawLink);
+    const rawMoreInfo = (d.raw && (d.raw['More Info'] || d.raw['More Info'])) || '';
+    const safeMoreInfo = normalizeUrl(rawMoreInfo);
+
+    let links = [];
+    if (safe)      links.push(`<a href="${safe}" target="_blank" rel="noopener">Wikipedia</a>`);
+    if (safeMoreInfo) links.push(`<a href="${safeMoreInfo}" target="_blank" rel="noopener">More Info</a>`);
+    nodeLinkEl.html(links.join(' | '));
+
+    const conns = Array.from(adjacency.get(d.id) || []).slice();
+    conns.sort((a,b) => a.localeCompare(b, undefined, {sensitivity:'base'}));
+    connectionsBox.innerHTML = '';
+    if (conns.length === 0) {
+      connectionsBox.innerHTML = '<div class="muted">No connections</div>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    const nodeSourceMap = connectionSources.get(d.id);
+    conns.forEach(name => {
+      const item = document.createElement('div');
+      item.className = 'conn-item';
+      item.style.display = 'flex';
+      item.style.alignItems = 'center';
+      item.style.justifyContent = 'space-between';
+      item.style.gap = '8px';
+      
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = name;
+      nameSpan.style.flex = '1';
+      nameSpan.style.cursor = 'pointer';
+      nameSpan.addEventListener('click', () => {
+        const targetNode = nodeById.get(name);
+        if (targetNode) {
+          selectedNode = targetNode;
+          populateInfoPanel(targetNode);
+          render();
+          connectionsBox.scrollTop = 0;
+        }
+      });
+      item.appendChild(nameSpan);
+      
+      const sourceUrl = nodeSourceMap ? nodeSourceMap.get(name) : null;
+      if (sourceUrl) {
+        const sourceIcon = document.createElement('a');
+        sourceIcon.href = normalizeUrl(sourceUrl) || '#';
+        sourceIcon.target = '_blank';
+        sourceIcon.rel = 'noopener';
+        sourceIcon.innerHTML = '🔗';
+        sourceIcon.style.fontSize = '16px';
+        sourceIcon.style.textDecoration = 'none';
+        sourceIcon.style.cursor = 'pointer';
+        sourceIcon.style.flexShrink = '0';
+        sourceIcon.title = 'View source';
+        sourceIcon.addEventListener('click', (e) => {
+          e.stopPropagation();
+        });
+        item.appendChild(sourceIcon);
+      }
+      
+      frag.appendChild(item);
+    });
+    connectionsBox.appendChild(frag);
+  }
+
+  function clearInfoPanel() {
+    nodeTitleEl.text('');
+    nodeMetaEl.text('');
+    nodeLinkEl.html('');
+    connectionsBox.innerHTML = '';
+  }
+
+  searchInput.addEventListener('input', onSearchInput);
+  searchBtn.addEventListener('click', () => performSearch(searchInput.value.trim()));
+  searchInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { performSearch(searchInput.value.trim()); ev.preventDefault(); } });
+
+  clearBtn.addEventListener('click', () => { 
+    selectedNode = null; 
+    clearInfoPanel(); 
+    render(); 
+    searchInput.value = ''; 
+    suggestionsEl.style('display', 'none').html(''); 
+    msgEl.text('');
+  });
+
+  function onSearchInput() {
+    const q = searchInput.value.trim();
+    suggestionsEl.style('display', 'none').html('');
+    msgEl.text('');
+    if (!q || q.length < 3) return;
+    const term = q.toLowerCase();
+    const matches = [];
+    for (const name of nameIndex) {
+      if (name && name.toLowerCase().includes(term)) matches.push(name);
+      if (matches.length >= CONFIG.maxSuggestions) break;
+    }
+    if (matches.length === 0) {
+      suggestionsEl.style('display','block').html('<div class="muted">No suggestions</div>');
+      return;
+    }
+    suggestionsEl.style('display','block').html('');
+    matches.forEach(m => {
+      suggestionsEl.append('div').attr('class','suggestion').text(m).on('click', () => {
+        searchInput.value = m;
+        suggestionsEl.style('display','none').html('');
+        performSearch(m);
+      });
+    });
+  }
+
+  function performSearch(q) {
+    if (!q) return;
+    const exact = nodes.find(n => n.name && n.name.toLowerCase() === q.toLowerCase());
+    if (exact) {
+      selectedNode = exact; populateInfoPanel(exact); render(); d3.select('#msg').text(''); return;
+    }
+    const matches = nodes.filter(n => n.name && n.name.toLowerCase().includes(q.toLowerCase()));
+    if (matches.length === 1) {
+      selectedNode = matches[0]; populateInfoPanel(matches[0]); render(); d3.select('#msg').text(''); return;
+    } else if (matches.length > 1) {
+      suggestionsEl.style('display','block').html('');
+      matches.slice(0, CONFIG.maxSuggestions).forEach(m => {
+        suggestionsEl.append('div').attr('class','suggestion').text(m.name).on('click', () => {
+          searchInput.value = m.name;
+          suggestionsEl.style('display','none').html('');
+          selectedNode = m;
+          populateInfoPanel(m);
+          render();
+        });
+      });
+      d3.select('#msg').text('Multiple matches – click a suggestion.'); return;
+    } else {
+      d3.select('#msg').text('Search term not found. Please try again.');
+    }
+  }
+
+  function hideLoadingOverlay() { loadingOverlay.style.display = 'none'; }
+
+  window.__fdg = { nodes, links, CONFIG, render, zoomLevel, panX, panY };
+  </script>
+</body>
+</html>
